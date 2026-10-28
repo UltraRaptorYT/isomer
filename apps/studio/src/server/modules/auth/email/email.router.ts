@@ -2,6 +2,7 @@ import type { SessionData } from "~/lib/types/session"
 import type { GrowthbookAttributes } from "~/types/growthbook"
 import { TRPCError } from "@trpc/server"
 import { pick, set } from "lodash-es"
+import { ISOMER_SUPPORT_EMAIL } from "~/constants/misc"
 import { env } from "~/env.mjs"
 import { sendLoginAlertEmail } from "~/features/mail/service"
 import {
@@ -23,6 +24,7 @@ import { isEmailWhitelisted } from "../../whitelist/whitelist.service"
 import { VerificationError } from "../auth.error"
 import { recordUserLogin, verifyToken } from "../auth.service"
 import { createTokenHash, createVfnPrefix, createVfnToken } from "../auth.util"
+import { clearSessionData, toSessionVerificationToken } from "../session"
 import { upsertUser } from "./email.service"
 import { getOtpFingerPrint } from "./utils"
 
@@ -60,6 +62,16 @@ export const emailSessionRouter = router({
       const otpPrefix = isStaticOtp ? "OTP" : createVfnPrefix()
       const hashedToken = createTokenHash(token, email)
 
+      // NOTE: Skip issuing the OTP and saving to database so that
+      // the person can never log in to the system user email.
+      // Not rejecting error outright so that it looks like the email is valid
+      if (email === env.SYSTEM_USER_EMAIL) {
+        return {
+          otpPrefix,
+          email,
+        }
+      }
+
       const url = new URL(getBaseUrl())
 
       ctx.logger.info({ email, expires }, "Generated OTP for email sign in")
@@ -89,7 +101,8 @@ export const emailSessionRouter = router({
                 subject: `Sign in to ${url.host}`,
                 body: `Your OTP is ${otpPrefix}-<b>${token}</b>. It expires in ${expiryMinutes} minutes.
       Please use this to login to your account.
-      <p>If your OTP does not work, please request for a new one.</p>`,
+      <p>If your OTP does not work, please request for a new one.</p>
+      <p>If you did not request this OTP, please report it to ${ISOMER_SUPPORT_EMAIL}.</p>`,
                 recipient: email,
               }),
         ])
@@ -192,10 +205,10 @@ export const emailSessionRouter = router({
           email,
         })
 
-        ctx.session.destroy()
+        clearSessionData(ctx.session)
         set(ctx.session, "singpass.sessionState", {
           userId: user.id,
-          verificationToken: oldVerificationToken,
+          verificationToken: toSessionVerificationToken(oldVerificationToken),
         })
         await ctx.session.save()
         return pick(user, defaultUserSelect)

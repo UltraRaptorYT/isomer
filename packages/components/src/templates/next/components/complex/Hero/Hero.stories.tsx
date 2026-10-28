@@ -26,6 +26,7 @@ type Story = StoryObj<typeof Hero>
 
 export const Gradient: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl: "/hero-banner.png",
     title: "Ministry of Trade and Industry",
@@ -41,6 +42,7 @@ export const Gradient: Story = {
 
 export const ColourBlock: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1725652264563-9f8eea4e2995?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -58,6 +60,7 @@ export const ColourBlock: Story = {
 
 export const ColourBlockInverse: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1725652264563-9f8eea4e2995?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -73,8 +76,50 @@ export const ColourBlockInverse: Story = {
   },
 }
 
+const colourBlockImageMatrixArgs = {
+  headingLevel: 1,
+  site: generateSiteConfig(),
+  backgroundUrl: "/hero-block-transparent.png",
+  title: "Block hero image position and edge",
+  subtitle:
+    "Use mobile and tablet viewports to check stack order and curved edges.",
+  buttonLabel: "Main CTA",
+  buttonUrl: "/",
+  variant: "block" as const,
+  theme: "default" as const,
+}
+
+export const ColourBlockRightStraight: Story = {
+  args: {
+    ...colourBlockImageMatrixArgs,
+    blockImage: { imagePosition: "right", imageEdge: "straight" },
+  },
+}
+
+export const ColourBlockRightCurved: Story = {
+  args: {
+    ...colourBlockImageMatrixArgs,
+    blockImage: { imagePosition: "right", imageEdge: "curved" },
+  },
+}
+
+export const ColourBlockLeftStraight: Story = {
+  args: {
+    ...colourBlockImageMatrixArgs,
+    blockImage: { imagePosition: "left", imageEdge: "straight" },
+  },
+}
+
+export const ColourBlockLeftCurved: Story = {
+  args: {
+    ...colourBlockImageMatrixArgs,
+    blockImage: { imagePosition: "left", imageEdge: "curved" },
+  },
+}
+
 export const ColourBlockLongWord: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1725652264563-9f8eea4e2995?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -92,6 +137,7 @@ export const ColourBlockLongWord: Story = {
 
 export const LargeImage: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1560114928-40f1f1eb26a0?q=80&w=3870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -108,6 +154,7 @@ export const LargeImage: Story = {
 
 export const Floating: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1560114928-40f1f1eb26a0?q=80&w=3870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -124,6 +171,7 @@ export const Floating: Story = {
 
 export const FloatingInverse: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1560114928-40f1f1eb26a0?q=80&w=3870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -141,6 +189,7 @@ export const FloatingInverse: Story = {
 
 export const FloatingShortText: Story = {
   args: {
+    headingLevel: 1,
     site: generateSiteConfig(),
     backgroundUrl:
       "https://images.unsplash.com/photo-1560114928-40f1f1eb26a0?q=80&w=3870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
@@ -157,6 +206,7 @@ export const FloatingShortText: Story = {
 export const Searchbar: Story = {
   decorators: [withSearchSgSetup()],
   args: {
+    headingLevel: 1,
     site: generateSiteConfig({
       search: {
         type: "searchSG",
@@ -173,6 +223,7 @@ export const Searchbar: Story = {
 export const SearchbarWithImage: Story = {
   decorators: [withSearchSgSetup()],
   args: {
+    headingLevel: 1,
     site: generateSiteConfig({
       search: {
         type: "searchSG",

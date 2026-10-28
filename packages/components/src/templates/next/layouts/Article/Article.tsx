@@ -5,6 +5,7 @@ import { getIndexByPermalink } from "~/utils/getIndexByPermalink"
 import { ArticlePageHeader } from "../../components/internal/ArticlePageHeader"
 import { BackToTopLink } from "../../components/internal/BackToTopLink"
 import { renderPageContent } from "../../render"
+import { getDateFilterDisplayEntries } from "../Collection/utils/getDateFilterDisplayEntries"
 import { getPillAndPlaintextTags } from "../Collection/utils/getPillAndPlaintextTags"
 import { Skeleton } from "../Skeleton"
 
@@ -43,15 +44,22 @@ export const ArticleLayout = ({
           title={page.title}
           date={page.date}
           pillTags={pillTags}
+          site={site}
+          dateFilterDisplayEntries={
+            getDateFilterDisplayEntries(page.dateTagged, parentTagCategories)
+              .dateFilterDisplayEntries
+          }
         />
 
         <div className="mx-auto w-full gap-10 pb-20">
-          <div className="w-full overflow-x-auto break-words lg:max-w-[660px]">
+          <div className="w-full overflow-x-auto overflow-y-hidden break-words lg:max-w-[660px]">
             {renderPageContent({
               site,
               layout,
               content,
               permalink: page.permalink,
+              // ArticlePageHeader above already owns the page's h1.
+              headingLevel: 2,
             })}
           </div>
           <BackToTopLink />

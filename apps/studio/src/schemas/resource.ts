@@ -21,8 +21,9 @@ export const getChildrenSchema = z
   .object({
     resourceId: z.union([bigIntSchema, z.null()]),
     siteId: z.string().min(0),
+    includeSearchPage: z.boolean().optional().default(true),
   })
-  .merge(infiniteOffsetPaginationSchema)
+  .extend(infiniteOffsetPaginationSchema.shape)
 
 export const getChildrenOutputSchema = z.object({
   items: z.array(z.custom<ResourceItemContent>()),
@@ -47,9 +48,36 @@ export const moveSchema = z.object({
   shouldCreateRedirect: z.boolean().optional().default(true),
 })
 
+// Read-only pre-flight for the move mutation's unpublish-lock check, so the
+// UI can warn as soon as a destination is picked instead of only on submit.
+export const getMoveLockInfoSchema = z.object({
+  siteId: z.number(),
+  movedResourceId: bigIntSchema,
+  destinationResourceId: bigIntSchema.nullable(),
+})
+
+export const getMoveLockInfoOutputSchema = z.object({
+  isBlocked: z.boolean(),
+})
+
+export const resourceStatusFilterOptions = [
+  "live",
+  "notLive",
+  "scheduledToPublish",
+  "scheduledToUnpublish",
+  "hasDraft",
+] as const
+
+export type ResourceStatusFilterOption =
+  (typeof resourceStatusFilterOptions)[number]
+
 export const countResourceSchema = z.object({
   siteId: z.number(),
   resourceId: z.number().optional(),
+  statusFilter: z
+    .array(z.enum(resourceStatusFilterOptions))
+    .optional()
+    .default([]),
 })
 
 export const deleteResourceSchema = z.object({
@@ -62,7 +90,11 @@ export const getParentSchema = z.object({
   resourceId: bigIntSchema,
 })
 
-export const resourceOrderByOptions = ["updated-desc", "title-asc"] as const
+export const resourceOrderByOptions = [
+  "updated-desc",
+  "title-asc",
+  "permalink-asc",
+] as const
 
 export type ResourceOrderByOption = (typeof resourceOrderByOptions)[number]
 
@@ -71,8 +103,12 @@ export const listResourceSchema = z
     siteId: z.number(),
     resourceId: z.number().optional(),
     orderBy: z.enum(resourceOrderByOptions).optional().default("updated-desc"),
+    statusFilter: z
+      .array(z.enum(resourceStatusFilterOptions))
+      .optional()
+      .default([]),
   })
-  .merge(offsetPaginationSchema)
+  .extend(offsetPaginationSchema.shape)
 
 export const getFullPermalinkSchema = z.object({
   siteId: z.number(),
@@ -119,11 +155,11 @@ export const searchSchema = z
     siteId: z.string(),
     query: z.string().trim().optional(),
     resourceTypes: z
-      .array(z.nativeEnum(ResourceType))
+      .array(z.enum(ResourceType))
       .optional()
       .default(Object.values(ResourceType)),
   })
-  .merge(infiniteOffsetPaginationSchema)
+  .extend(infiniteOffsetPaginationSchema.shape)
 
 export const searchOutputSchema = z.object({
   totalCount: z.number().nullable(),

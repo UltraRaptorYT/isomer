@@ -1,5 +1,10 @@
 import type { Level } from "@tiptap/extension-heading"
 import type { Extensions } from "@tiptap/react"
+import type { Editor } from "@tiptap/react"
+import {
+  getTableCellBackgroundColorCss,
+  isTableCellBackgroundColorToken,
+} from "@opengovsg/isomer-components"
 import { Bold } from "@tiptap/extension-bold"
 import { BulletList } from "@tiptap/extension-bullet-list"
 import { Document } from "@tiptap/extension-document"
@@ -20,18 +25,36 @@ import { Superscript } from "@tiptap/extension-superscript"
 import { Table } from "@tiptap/extension-table"
 import { TableCell } from "@tiptap/extension-table-cell"
 import { TableHeader } from "@tiptap/extension-table-header"
+import { TableRow } from "@tiptap/extension-table-row"
 import { Text } from "@tiptap/extension-text"
 import { Underline } from "@tiptap/extension-underline"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
-import { textblockTypeInputRule } from "@tiptap/react"
+import { ReactNodeViewRenderer, textblockTypeInputRule } from "@tiptap/react"
+import { TableNodeView } from "~/features/editing-experience/components/TableCaption/TableNodeView"
+import { DEFAULT_TABLE_CAPTION } from "~/features/editing-experience/components/TableCaption/utils"
+import {
+  insertColumnWidth,
+  removeColumnWidths,
+  withStoredColumnWidths,
+  type WidthCommand,
+} from "~/features/editing-experience/utils/columnWidths"
 
+import { canMergeCells } from "../../components/TableBubbleMenu/TableBubbleMenu.utils"
+import {
+  focusTableBubbleMenuTrigger,
+  runTableBubbleMenuFocusTrigger,
+} from "../../components/TableBubbleMenu/tableBubbleMenuFocus"
 import {
   createTableSelectionBorderPlugin,
   getHtmlWithRelativeReferenceLinks,
 } from "../../utils"
+import { expandedTablePlugin } from "../../utils/expandTableEditor"
+import {
+  wrapHeaderToggleCommand,
+  type HeaderToggleCommand,
+} from "./clearTableCellBackgroundOnKindChange"
+import { deleteEmptyTextblockBeforeTable } from "./deleteEmptyTextblockBeforeTable"
 import { selectTableCellContent } from "./selectTableCellContent"
-
-export { TableRow } from "@tiptap/extension-table-row"
 
 export const HEADING_TYPE = "heading"
 export const PARAGRAPH_TYPE = "paragraph"
@@ -113,31 +136,133 @@ export const PROSE_EXTENSIONS: Extensions = [
 export const IsomerTable = Table.extend({
   // Higher than TipTap's default keymap so Mod-a is handled here first.
   priority: 101,
+  addCommands() {
+    const parent = this.parent?.()
+    const parentToggleHeaderRow = parent?.toggleHeaderRow
+    const parentToggleHeaderColumn = parent?.toggleHeaderColumn
+    const parentMergeCells = parent?.mergeCells
+
+    return {
+      ...parent,
+      mergeCells: () => (props) => {
+        if (!canMergeCells(props.state)) return false
+        return parentMergeCells?.()(props) ?? false
+      },
+      focusTableBubbleMenuTrigger:
+        () =>
+        ({ editor }: { editor: Editor }) =>
+          runTableBubbleMenuFocusTrigger(editor),
+      toggleHeaderRow: wrapHeaderToggleCommand(
+        parentToggleHeaderRow?.() as HeaderToggleCommand | undefined,
+      ),
+      toggleHeaderColumn: wrapHeaderToggleCommand(
+        parentToggleHeaderColumn?.() as HeaderToggleCommand | undefined,
+      ),
+      addColumnBefore: () =>
+        withStoredColumnWidths(
+          parent?.addColumnBefore?.() as WidthCommand | undefined,
+          (widths, rect) => insertColumnWidth(widths, rect.left),
+        ),
+      addColumnAfter: () =>
+        withStoredColumnWidths(
+          parent?.addColumnAfter?.() as WidthCommand | undefined,
+          (widths, rect) => insertColumnWidth(widths, rect.right),
+        ),
+      deleteColumn: () =>
+        withStoredColumnWidths(
+          parent?.deleteColumn?.() as WidthCommand | undefined,
+          (widths, rect) => removeColumnWidths(widths, rect.left, rect.right),
+        ),
+    }
+  },
   addAttributes() {
     return {
       caption: {
-        default: "Table caption",
+        default: DEFAULT_TABLE_CAPTION,
+      },
+      columnWidths: {
+        default: null,
+        // Clipboard HTML stringifies attrs unpredictably; ignore widths on paste.
+        parseHTML: () => null,
       },
     }
   },
+  // Custom node view renders the caption above the table.
+  addNodeView() {
+    return ReactNodeViewRenderer(TableNodeView, {
+      contentDOMElementTag: "tbody",
+    })
+  },
   addKeyboardShortcuts() {
+    const parentShortcuts = this.parent?.() ?? {}
+    const deleteTableWhenAllCellsSelected = parentShortcuts.Backspace
+
+    const handleBackspace = () =>
+      deleteEmptyTextblockBeforeTable(this.editor) ||
+      deleteTableWhenAllCellsSelected?.({ editor: this.editor }) ||
+      false
+
     return {
-      ...this.parent?.(),
+      ...parentShortcuts,
       "Mod-a": () =>
         selectTableCellContent(this.editor) || this.editor.commands.selectAll(),
+      Tab: ({ editor }) => {
+        if (focusTableBubbleMenuTrigger(editor)) {
+          return true
+        }
+        return parentShortcuts.Tab?.({ editor }) ?? false
+      },
+      Backspace: handleBackspace,
+      "Mod-Backspace": handleBackspace,
+      "Shift-Backspace": handleBackspace,
     }
   },
   addProseMirrorPlugins() {
-    return [...(this.parent?.() ?? []), createTableSelectionBorderPlugin()]
+    return [
+      ...(this.parent?.() ?? []),
+      createTableSelectionBorderPlugin(),
+      expandedTablePlugin(),
+    ]
   },
 })
 
+const tableCellBackgroundColorAttribute = {
+  default: null as string | null,
+  parseHTML: (element: HTMLElement) => {
+    const value = element.getAttribute("data-background-color")
+    return isTableCellBackgroundColorToken(value) ? value : null
+  },
+  renderHTML: (attributes: Record<string, unknown>) => {
+    const css = getTableCellBackgroundColorCss(attributes.backgroundColor)
+    if (!css || !isTableCellBackgroundColorToken(attributes.backgroundColor)) {
+      return {}
+    }
+
+    return {
+      "data-background-color": attributes.backgroundColor,
+      style: `background-color: ${css}`,
+    }
+  },
+}
+
 export const IsomerTableCell = TableCell.extend({
   content: "(paragraph|list)+",
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: tableCellBackgroundColorAttribute,
+    }
+  },
 })
 
 export const IsomerTableHeader = TableHeader.extend({
   content: "paragraph+",
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: tableCellBackgroundColorAttribute,
+    }
+  },
 })
 
 export const IsomerHeading = Heading.extend({
@@ -162,3 +287,12 @@ export const IsomerHeading = Heading.extend({
 }).configure({
   levels: HEADING_LEVELS,
 })
+
+export const TEXT_EDITOR_EXTRA_EXTENSIONS: Extensions = [
+  ...PROSE_EXTENSIONS,
+  TableRow,
+  IsomerTable,
+  IsomerTableCell,
+  IsomerTableHeader,
+  IsomerHeading,
+]

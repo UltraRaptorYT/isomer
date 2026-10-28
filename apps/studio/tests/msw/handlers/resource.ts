@@ -1,3 +1,5 @@
+import type { RouterOutput } from "~/utils/trpc"
+
 import { trpcMsw } from "../mockTrpc"
 import { DEFAULT_COLLECTION_ITEMS } from "./collection"
 import { DEFAULT_PAGE_ITEMS } from "./page"
@@ -45,6 +47,33 @@ export const resourceHandlers = {
       )
     },
   },
+  getFolderChildrenOf: {
+    // Ids match `getBatchAncestryWithSelf.foldersOnly()` so the resource
+    // picker's ancestry cache resolves these items by id.
+    default: () => {
+      return trpcMsw.resource.getFolderChildrenOf.query(() => {
+        return {
+          items: [
+            {
+              id: "1",
+              title: "Folder 1",
+              permalink: "folder-1",
+              type: "Folder",
+              parentId: null,
+            },
+            {
+              id: "2",
+              title: "Folder 2",
+              permalink: "folder-2",
+              type: "Folder",
+              parentId: null,
+            },
+          ],
+          nextOffset: null,
+        }
+      })
+    },
+  },
   getRolesFor: {
     admin: () => {
       return trpcMsw.resource.getRolesFor.query(() => {
@@ -85,6 +114,22 @@ export const resourceHandlers = {
         }
       })
     },
+    collectionLink: () => {
+      return trpcMsw.resource.getParentOf.query(() => {
+        return {
+          type: "CollectionLink",
+          id: "1",
+          parentId: "1",
+          title: "yet another link",
+          parent: {
+            type: "Collection",
+            id: "1",
+            parentId: null,
+            title: "a collection",
+          },
+        }
+      })
+    },
   },
   getAncestryStack: {
     default: () => {
@@ -92,40 +137,59 @@ export const resourceHandlers = {
         return []
       })
     },
-  },
-  getBatchAncestryWithSelf: {
-    default: () => {
-      return trpcMsw.resource.getBatchAncestryWithSelf.query(() => {
+    // Ancestors of a collection item sitting in `/resources/circulars`, root-first.
+    nestedCollection: () => {
+      return trpcMsw.resource.getAncestryStack.query(() => {
         return [
-          [
-            {
-              parentId: null,
-              id: "1",
-              title: "Collection 1",
-              permalink: "collection-1",
-              type: "Collection",
-            },
-          ],
-          [
-            {
-              parentId: null,
-              id: "2",
-              title: "Folder 1",
-              permalink: "folder-1",
-              type: "Folder",
-            },
-          ],
-          [
-            {
-              parentId: null,
-              id: "3",
-              title: "Page 1",
-              permalink: "page-1",
-              type: "Page",
-            },
-          ],
+          {
+            id: "10",
+            parentId: null,
+            title: "Resources",
+            permalink: "resources",
+            type: "Folder",
+          },
+          {
+            id: "11",
+            parentId: "10",
+            title: "Circulars",
+            permalink: "circulars",
+            type: "Collection",
+          },
         ]
       })
+    },
+  },
+  getBatchAncestryWithSelf: {
+    // Resolves each requested id back to its underlying DEFAULT_PAGE_ITEMS
+    // entry (getChildrenOf.default() encodes ids as `${parentId}-${title}-${itemId}`)
+    // so the picker shows the item actually being browsed, not an unrelated
+    // fixed response.
+    default: () => {
+      return trpcMsw.resource.getBatchAncestryWithSelf.query(
+        ({ input: { resourceIds } }) => {
+          return resourceIds.flatMap((resourceId) => {
+            const item = DEFAULT_PAGE_ITEMS.find((item) =>
+              resourceId.endsWith(`-${item.title}-${item.id}`),
+            )
+            if (!item) return []
+            return [
+              [
+                {
+                  id: resourceId,
+                  title: item.title,
+                  permalink: item.permalink,
+                  type: item.type as
+                    | "Page"
+                    | "Folder"
+                    | "Collection"
+                    | "CollectionPage",
+                  parentId: item.parentId,
+                },
+              ],
+            ]
+          })
+        },
+      )
     },
     foldersOnly: () => {
       return trpcMsw.resource.getBatchAncestryWithSelf.query(() => {
@@ -174,6 +238,18 @@ export const resourceHandlers = {
           title: "Index page",
           fullPermalink: "parent/_index",
         }
+      })
+    },
+  },
+  getMoveLockInfo: {
+    default: () => {
+      return trpcMsw.resource.getMoveLockInfo.query(() => {
+        return { isBlocked: false }
+      })
+    },
+    blocked: () => {
+      return trpcMsw.resource.getMoveLockInfo.query(() => {
+        return { isBlocked: true }
       })
     },
   },
@@ -237,6 +313,22 @@ export const resourceHandlers = {
           siteId: 1,
           publishedVersionId: null,
         }
+      }),
+    // Resolves the mocked metadata by the requested `resourceId`, so a story
+    // can give the moved resource and the picked destination distinct types
+    // (e.g. a Page moved onto a Collection) to exercise move validation.
+    byId: (
+      resourcesById: Record<
+        string,
+        RouterOutput["resource"]["getMetadataById"]
+      >,
+    ) =>
+      trpcMsw.resource.getMetadataById.query(({ input: { resourceId } }) => {
+        const resource = resourcesById[resourceId]
+        if (!resource) {
+          throw new Error(`No mocked resource for id ${resourceId}`)
+        }
+        return resource
       }),
   },
   search: {

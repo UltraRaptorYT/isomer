@@ -19,14 +19,14 @@ import { ResourceSelector } from "~/components/ResourceSelector/ResourceSelector
 import { BRIEF_TOAST_SETTINGS } from "~/constants/toast"
 import { usePermissions } from "~/features/permissions"
 import { withSuspense } from "~/hocs/withSuspense"
-import { useIsAdvancedRedirectsEnabled } from "~/hooks/useIsAdvancedRedirectsEnabled"
 import { useQueryParse } from "~/hooks/useQueryParse"
 import { sitePageSchema } from "~/pages/sites/[siteId]"
-import { normalizeRedirectPath } from "~/schemas/redirect"
+import { normalizeRedirectPath } from "~/schemas/redirect/utils"
 import { trpc } from "~/utils/trpc"
 import { ResourceType } from "~prisma/generated/generatedEnums"
 
 import { moveResourceAtom } from "../../atoms"
+import { useValidateResourceMove } from "../../hooks/useValidateResourceMove"
 
 export const MoveResourceModal = () => {
   // NOTE: This is what we are trying to move
@@ -117,6 +117,14 @@ const MoveResourceContent = withSuspense(
     })
 
     const movedItem = useAtomValue(moveResourceAtom)
+    const {
+      isLoading: isValidMoveLoading,
+      isValidMove,
+      errorMessage,
+    } = useValidateResourceMove({
+      sourceId: movedItem?.id,
+      destinationId: curResourceId ?? null,
+    })
 
     const [shouldCreateRedirect, setShouldCreateRedirect] = useState(true)
     const [{ fullPermalink: movedFullPermalink }] =
@@ -128,8 +136,19 @@ const MoveResourceContent = withSuspense(
       { siteId: Number(siteId), resourceId: curResourceId ?? "" },
       { enabled: !!curResourceId },
     )
-
-    const isAdvancedRedirectsEnabled = useIsAdvancedRedirectsEnabled()
+    // Pre-flight the move mutation's unpublish-lock check as soon as a
+    // destination is picked, rather than only surfacing it as an error
+    // toast after "Move here" is clicked.
+    const { data: moveLockInfo, isFetching: isMoveLockInfoFetching } =
+      trpc.resource.getMoveLockInfo.useQuery(
+        {
+          siteId: Number(siteId),
+          movedResourceId: resourceId,
+          destinationResourceId: curResourceId ?? null,
+        },
+        { enabled: curResourceId !== undefined },
+      )
+    const isMoveBlocked = !!moveLockInfo?.isBlocked
 
     // Only published Page/CollectionPage have a live URL worth preserving — the
     // server skips redirect creation for unpublished pages, so don't offer it.
@@ -137,11 +156,10 @@ const MoveResourceContent = withSuspense(
       (type === ResourceType.Page || type === ResourceType.CollectionPage) &&
       publishedVersionId !== null
     // A Folder/Collection preserves its subtree with one wildcard redirect. It
-    // has no publishedVersionId of its own, so the server decides (on published
-    // descendants); here we only gate on the advanced-redirects flag.
+    // has no publishedVersionId of its own, so the server decides based on
+    // published descendants.
     const isFolderRedirect =
-      (type === ResourceType.Folder || type === ResourceType.Collection) &&
-      isAdvancedRedirectsEnabled
+      type === ResourceType.Folder || type === ResourceType.Collection
     const isRedirectableType = isPageRedirectable || isFolderRedirect
     const oldFullPermalink = normalizeRedirectPath(movedFullPermalink)
     const newFullPermalink = normalizeRedirectPath(
@@ -153,14 +171,23 @@ const MoveResourceContent = withSuspense(
       curResourceId === null || (curResourceId !== undefined && !!destination)
     // Moving a page into its current parent leaves the URL unchanged, so there's
     // nothing to redirect — only offer the option when the URL actually changes.
+    // An invalid destination has no resulting URL, so gate on a valid move too.
+    // A blocked move won't happen, so don't contradict the block warning.
     const showRedirectOption =
+      isValidMove === true &&
+      !isMoveBlocked &&
       isRedirectableType &&
       isDestinationResolved &&
       oldFullPermalink !== newFullPermalink
-    // The URL-change notice shows for any resource once a picked destination
-    // actually changes its URL; the redirect checkbox is the published subset.
+    // CollectionLinks have no URL of their own (their permalink is a hidden
+    // random UUID), so skip the notice even though their permalink changes.
+    // An invalid destination has no resulting URL, so gate on a valid move too.
     const showUrlChangeNotice =
-      isDestinationResolved && oldFullPermalink !== newFullPermalink
+      isValidMove === true &&
+      !isMoveBlocked &&
+      type !== ResourceType.CollectionLink &&
+      isDestinationResolved &&
+      oldFullPermalink !== newFullPermalink
     const { data: existingRedirect } = trpc.redirect.getBySource.useQuery(
       { siteId: Number(siteId), source: newFullPermalink },
       { enabled: showRedirectOption },
@@ -179,6 +206,19 @@ const MoveResourceContent = withSuspense(
               existingResource={movedItem ?? undefined}
               onChange={(resourceId) => setCurResourceId(resourceId)}
             />
+            {curResourceId !== undefined &&
+              errorMessage &&
+              !isValidMoveLoading && (
+                <Infobox variant="error" size="sm" w="full">
+                  {errorMessage}
+                </Infobox>
+              )}
+            {isMoveBlocked && (
+              <Infobox variant="warning" size="sm" w="full">
+                This destination (or a folder/collection above it) is scheduled
+                to be unpublished, so a published page can't be moved here.
+              </Infobox>
+            )}
             {showUrlChangeNotice && (
               <VStack alignItems="flex-start" spacing="0.75rem" w="full">
                 <Box
@@ -237,16 +277,23 @@ const MoveResourceContent = withSuspense(
             Cancel
           </Button>
           <Button
-            // NOTE: disable this button if the resourceId to be moved is missing
-            // or if the user does not have sufficient permissions to move to the destination
+            // NOTE: disable this button if the resourceId to be moved is missing,
+            // if the user does not have sufficient permissions to move to the
+            // destination, if the move is blocked by the unpublish-lock check
+            // (or that check hasn't resolved yet)
             isDisabled={
               curResourceId === undefined ||
               ability.cannot("move", {
                 parentId: curResourceId ?? null,
               }) ||
-              ability.cannot("move", { parentId: movedItem?.parentId ?? null })
+              ability.cannot("move", {
+                parentId: movedItem?.parentId ?? null,
+              }) ||
+              isValidMove !== true ||
+              isMoveLockInfoFetching ||
+              isMoveBlocked
             }
-            isLoading={isPending}
+            isLoading={isPending || isValidMoveLoading}
             onClick={() =>
               movedItem?.id &&
               mutate({

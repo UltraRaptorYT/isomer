@@ -72,6 +72,7 @@ const SuspensableResourceSelector = ({
   const hasAdditionalLeftPadding: boolean = isSearchQueryEmpty
 
   const {
+    rootPage,
     fullPermalink,
     moveDestPermalink,
     moveDest,
@@ -89,6 +90,9 @@ const SuspensableResourceSelector = ({
 
   const {
     resourceItemsWithAncestryStack,
+    hasAncestryError,
+    isRetryingAncestry,
+    retryAncestry,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -105,6 +109,7 @@ const SuspensableResourceSelector = ({
 
   const {
     isResourceIdHighlighted,
+    isHomeHighlighted,
     isResourceItemDisabled,
     hasParentInStack,
     handleClickBackButton,
@@ -133,8 +138,20 @@ const SuspensableResourceSelector = ({
           hasParentInStack={hasParentInStack}
           handleClickBackButton={handleClickBackButton}
           resourceItemsWithAncestryStack={resourceItemsWithAncestryStack}
+          handleOnClick={() =>
+            handleClickResourceItem([
+              {
+                title: "Home",
+                permalink: "",
+                type: ResourceType.RootPage,
+                id: rootPage.id,
+                parentId: null,
+              },
+            ])
+          }
           searchQuery={searchQuery}
           isLoading={isLoading}
+          isHomeHighlighted={isHomeHighlighted}
         />
       </Suspense>
     )
@@ -143,8 +160,11 @@ const SuspensableResourceSelector = ({
     hasParentInStack,
     handleClickBackButton,
     resourceItemsWithAncestryStack,
+    handleClickResourceItem,
     searchQuery,
     isLoading,
+    isHomeHighlighted,
+    rootPage.id,
   ])
 
   const renderedContent = useMemo(() => {
@@ -152,6 +172,9 @@ const SuspensableResourceSelector = ({
       <Suspense fallback={<LoadingResourceItemsResults />}>
         <SuspendableContent
           resourceItemsWithAncestryStack={resourceItemsWithAncestryStack}
+          hasError={hasAncestryError}
+          isRetrying={isRetryingAncestry}
+          onRetry={retryAncestry}
           isResourceIdHighlighted={isResourceIdHighlighted}
           isResourceItemDisabled={isResourceItemDisabled}
           hasAdditionalLeftPadding={hasAdditionalLeftPadding}
@@ -165,6 +188,9 @@ const SuspensableResourceSelector = ({
     )
   }, [
     resourceItemsWithAncestryStack,
+    hasAncestryError,
+    isRetryingAncestry,
+    retryAncestry,
     isResourceIdHighlighted,
     isResourceItemDisabled,
     hasAdditionalLeftPadding,
@@ -192,7 +218,7 @@ const SuspensableResourceSelector = ({
       >
         {renderedHeader}
         {renderedContent}
-        {hasNextPage && (
+        {hasNextPage && !hasAncestryError && (
           <Button
             variant="link"
             py="0.5rem"

@@ -9,9 +9,9 @@
  */
 
 import { initTRPC, TRPCError } from "@trpc/server"
+import { getHTTPStatusCodeFromError } from "@trpc/server/http"
 import { timingSafeEqual } from "node:crypto"
 import superjson from "superjson"
-import { ZodError } from "zod"
 import { APP_VERSION_HEADER_KEY } from "~/constants/version"
 import { env } from "~/env.mjs"
 import { createBaseLogger } from "~/lib/logger"
@@ -23,6 +23,9 @@ import { db } from "./modules/database"
 import { defaultUserSelect } from "./modules/me/me.select"
 import { checkRateLimit } from "./modules/rate-limit/rate-limit.service"
 import { isEmailWhitelisted } from "./modules/whitelist/whitelist.service"
+import { flattenZodErrorForTrpcClient } from "./trpcZodError"
+
+const MIN_SERVER_ERROR_STATUS_CODE = 500
 
 interface Meta {
   rateLimitOptions?: RateLimitMetaOptions
@@ -44,10 +47,7 @@ const t = initTRPC
         ...shape,
         data: {
           ...shape.data,
-          zodError:
-            error.code === "BAD_REQUEST" && error.cause instanceof ZodError
-              ? error.cause.flatten()
-              : null,
+          zodError: flattenZodErrorForTrpcClient(error.code, error.cause),
         },
       }
     },
@@ -76,14 +76,19 @@ const loggerMiddleware = t.middleware(
         `[${type}]: ${path} - ${durationInMs}ms - OK`,
       )
     } else {
-      logger.error(
+      // Client errors (4xx) are expected; logging them at error buries real failures
+      const level =
+        getHTTPStatusCodeFromError(result.error) >= MIN_SERVER_ERROR_STATUS_CODE
+          ? "error"
+          : "warn"
+      logger[level](
         {
           durationInMs,
           err: result.error,
           rawInput,
           userId: ctx.session?.userId,
         },
-        `[${type}]: ${path} - ${durationInMs}ms - ${result.error.code} ${result.error.message} - ERROR`,
+        `[${type}]: ${path} - ${durationInMs}ms - ${result.error.code} ${result.error.message} - ${level.toUpperCase()}`,
       )
     }
 
@@ -225,10 +230,14 @@ const rateLimitMiddleware = t.middleware(async ({ next, ctx, meta }) => {
     return next()
   }
 
-  if (
-    env.NODE_ENV === "test" &&
-    !meta.rateLimitOptions._internalUseRateLimiterInTestEnv
-  ) {
+  // `next build`/`next start` bakes `process.env.NODE_ENV` into the bundle as
+  // "production" (webpack DefinePlugin), so `env.NODE_ENV` is never "test" in
+  // the E2E CI server even though `.env.test` sets it — `NEXT_PUBLIC_APP_ENV`
+  // isn't subject to that inlining here since it's absent at build time, so it
+  // reflects the real runtime value from `.env.test`.
+  const isTestEnv =
+    env.NODE_ENV === "test" || env.NEXT_PUBLIC_APP_ENV === "test"
+  if (isTestEnv && !meta.rateLimitOptions._internalUseRateLimiterInTestEnv) {
     return next()
   }
 

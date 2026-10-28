@@ -1,9 +1,12 @@
 import type { IsomerPageSchemaType } from "~/types"
 
+import { isSiteNotificationActive } from "../../../../utils/isSiteNotificationActive"
+import { CentralNotification } from "../../components/internal/CentralNotification"
 import { Footer } from "../../components/internal/Footer"
 import { Masthead } from "../../components/internal/Masthead"
 import { Navbar } from "../../components/internal/Navbar"
 import { Notification } from "../../components/internal/Notification"
+import { Polyglot } from "../../components/internal/Polyglot"
 import { ScrollToTop } from "../../components/internal/ScrollToTop"
 import { SkipToContent } from "../../components/internal/SkipToContent"
 import { UnsupportedBrowserBanner } from "../../components/internal/UnsupportedBrowserBanner"
@@ -27,7 +30,9 @@ export const Skeleton = ({
 
         {site.isGovernment && <Masthead isStaging={isStaging} />}
 
-        {site.notification?.title && (
+        <CentralNotification site={site} />
+
+        {isSiteNotificationActive(site.notification) && (
           <Notification {...site.notification} site={site} />
         )}
 
@@ -52,6 +57,7 @@ export const Skeleton = ({
         tabIndex={-1}
         className="focus-visible:outline-none"
       >
+        {site.enablePolyglot && <Polyglot environment={site.environment} />}
         {children}
       </main>
 

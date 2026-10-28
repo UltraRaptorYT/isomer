@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs"
+import type { Meta, StoryObj } from "@storybook/nextjs-vite"
 import { userEvent, within } from "storybook/test"
 import { meHandlers } from "tests/msw/handlers/me"
 import { pageHandlers } from "tests/msw/handlers/page"
@@ -151,6 +151,28 @@ export const WithTags: Story = {
     msw: {
       handlers: [
         pageHandlers.getCollectionTags.default(),
+        sitesHandlers.getLocalisedSitemap.collection(),
+        ...COMMON_HANDLERS,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const button = await canvas.findByRole("button", {
+      name: /article page header/i,
+    })
+
+    await userEvent.click(button)
+  },
+}
+
+// Shows the date filter's date picker within the collection item's metadata
+// drawer, when the parent collection index page has a date filter enabled.
+export const WithDateFilter: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        pageHandlers.getCollectionTags.withDateFilter(),
         sitesHandlers.getLocalisedSitemap.collection(),
         ...COMMON_HANDLERS,
       ],

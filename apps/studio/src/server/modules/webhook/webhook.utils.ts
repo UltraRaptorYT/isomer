@@ -3,8 +3,8 @@ import type { BuildStatusType } from "~prisma/generated/prisma/client"
 import { compact } from "lodash-es"
 import { TOPPAN_EMAIL_DOMAIN } from "~/constants/toppan"
 import {
-  sendFailedPublishEmail,
-  sendSuccessfulPublishEmail,
+  sendSiteUpdateFailedEmail,
+  sendSiteUpdatedEmail,
 } from "~/features/mail/service"
 import {
   ENABLE_EMAILS_FOR_REGULAR_PUBLISHES_FEATURE_KEY,
@@ -53,15 +53,16 @@ export const updateCodebuildStatusAndSendEmails = async (
   let codebuildJobIdsForSentEmails: string[] = []
   await updateCurrentAndSupersededBuilds(buildId, status)
   // send notification emails on a best-effort basis, so we catch any errors and log them
+  // `buildStatus`, not `status`: Datadog reads a top-level `status` as the log level
   try {
     codebuildJobIdsForSentEmails = await sendEmails(gb, buildId, status)
     logger.info(
-      { buildId, status, codebuildJobIdsForSentEmails },
+      { buildId, buildStatus: status, codebuildJobIdsForSentEmails },
       `Emails sent for buildId ${String(buildId)}`,
     )
   } catch (error) {
     logger.error(
-      { buildId, status, error },
+      { buildId, buildStatus: status, error },
       `Failed to send notification emails for build status ${String(status)} for buildId ${String(buildId)}.`,
     )
   }
@@ -128,7 +129,7 @@ const sendEmails = async (
             }
             return {
               id: info.codeBuildJobId, // codebuild job id
-              promise: sendSuccessfulPublishEmail({
+              promise: sendSiteUpdatedEmail({
                 isScheduled: info.isScheduled,
                 recipientEmail: info.email,
                 resource: info,
@@ -137,7 +138,7 @@ const sendEmails = async (
           case "FAILED":
             return {
               id: info.codeBuildJobId, // codebuild job id
-              promise: sendFailedPublishEmail({
+              promise: sendSiteUpdateFailedEmail({
                 isScheduled: info.isScheduled,
                 recipientEmail: info.email,
                 resource: info,

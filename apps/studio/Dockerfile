@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:24.22.1-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d AS base
 
 ARG NEXT_PUBLIC_APP_ENV
 ENV NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV
@@ -41,17 +41,16 @@ ENV NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=$NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
 ENV KEEP_ALIVE_TIMEOUT 70000
 
 FROM base AS builder
-RUN apk update
-RUN apk add --no-cache libc6-compat
+RUN apk update && apk add --no-cache libc6-compat
 
 # Set working directory
 WORKDIR /app
 # pnpm global bin is under PNPM_HOME/bin (not on PATH by default); npm's -g used /usr/local/bin.
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME/bin:$PATH"
-RUN corepack enable && corepack install -g pnpm@11.5.1
-# fixed version to prevent supply chain attacks (to ensure it's same version as pnpm-workspace.yaml)
-RUN pnpm add -g turbo@2.10.7
+RUN corepack enable && corepack install -g pnpm@12.0.0
+# Pin turbo to the resolved catalog version to prevent supply chain attacks
+RUN pnpm add -g turbo@2.11.2
 COPY . .
 
 # Generate a partial monorepo with a pruned lockfile for a target workspace.
@@ -60,11 +59,10 @@ RUN turbo prune isomer-studio --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
-RUN apk update
-RUN apk add --no-cache libc6-compat
+RUN apk update && apk add --no-cache libc6-compat
 WORKDIR /app
 
-RUN corepack enable && corepack install -g pnpm@11.5.1
+RUN corepack enable && corepack install -g pnpm@12.0.0
 
 # First install the dependencies (as they change less often)
 COPY --from=builder /app/out/json/ .

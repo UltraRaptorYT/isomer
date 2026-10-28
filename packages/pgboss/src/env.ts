@@ -1,7 +1,8 @@
 import { z } from "zod"
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
+  ENABLE_CRON_WORKERS: z.stringbool().optional().default(false),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

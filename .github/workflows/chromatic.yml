@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # For pull requests it's not necessary to checkout the code
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d
         id: filter
         with:
           filters: |
@@ -58,7 +58,7 @@ jobs:
         uses: ./.github/actions/setup
       # 👇 Adds Chromatic as a step in the workflow
       - name: Publish to Chromatic
-        uses: chromaui/action@14cfaef73576e69f95f47f60058063f46ca38719 # v18.1.0
+        uses: chromaui/action@6b3c2820222d23bad770d57a4ad5e2d1c91f92e9 # v18.9.5
         # Chromatic GitHub Action options
         with:
           workingDir: packages/components
@@ -74,6 +74,9 @@ jobs:
     # Operating System
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      # @storybook/nextjs-vite loads next.config.mjs, which validates env vars.
+      SKIP_ENV_VALIDATION: "true"
     # Job steps
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,7 +93,7 @@ jobs:
         run: pnpm --filter isomer-studio run build:preview-tw
       # 👇 Adds Chromatic as a step in the workflow
       - name: Publish to Chromatic
-        uses: chromaui/action@14cfaef73576e69f95f47f60058063f46ca38719 # v18.1.0
+        uses: chromaui/action@6b3c2820222d23bad770d57a4ad5e2d1c91f92e9 # v18.9.5
         # Chromatic GitHub Action options
         with:
           workingDir: apps/studio
